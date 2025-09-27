@@ -15,6 +15,17 @@ class Board(GameState):
         pass
 
 
+class Card:
+    """
+    This class represents a card in the game. It will contain information about
+    the card type, cost, and any other relevant data.
+    """
+    def __init__(self, card_type, cost_elixir):
+        self.card_type = card_type
+        self.cost_elixir = cost_elixir
+        self.card_id = id(self)  # Unique identifier for the card instance
+
+
 class ClashSimulation(GameTimeline):
     """
     ClashSimulation class that extends GameTimeline to manage the timeline of events specific to Clash Royale.
