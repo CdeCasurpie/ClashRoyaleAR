@@ -1,6 +1,6 @@
 from ClashLib.Simulation import GameState, GameTimeline, Event
 from ClashLib.MultiplayerConection import P2P
-import ClashLib.Menu as Menu
+from ClashLib.Menu import Menu
 import pygame
 import sys
 import random
