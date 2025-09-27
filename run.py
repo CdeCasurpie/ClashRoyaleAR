@@ -2,6 +2,7 @@ from ClashLib.Clash import Clash
 import sys
 
 if __name__ == "__main__":
+
     # obtener argumentos
     args = sys.argv[1:]
     if len(args) == 0:

@@ -6,14 +6,14 @@ class Entity(ABC):
     This class represents a generic entity in the game. It will contain
     information about position, health, owner, etc.
     """
-    def __init__(self, x, y, owner):
+    def __init__(self, x, y, owner, entity_type = 'troop'):
         self.x = x
         self.y = y
         self.owner = owner  # Could be 'player1' or 'player2'
         self.entity_id = id(self)  # Unique identifier for the entity instance
         self.active = True  # Indicates if the entity is active in the game
-
-    @abstractmethod
+        self.type = entity_type  # 'troop', 'tower', 'spell', 'projectile', etc.
+    @abstractmethod 
     def update(self):
         """
         Update the entity state based on the game rules.
@@ -49,6 +49,7 @@ class Tower(Entity):
         for entity in entities:
             if entity.owner == self.owner or not entity.active: # falta poner if entity.type == hechizo
                 continue
+
             dx = entity.x - self.x
             dy = entity.y - self.y
             dist = math.hypot(dx, dy)

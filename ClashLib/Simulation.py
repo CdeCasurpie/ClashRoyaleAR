@@ -30,7 +30,7 @@ class GameState(ABC):
         pass
 
     @abstractmethod
-    def update(self):
+    def update(self, tick_time):
         """
         Update the game state based on the rules of the game.
         """
@@ -61,7 +61,7 @@ class GameTimeline(ABC):
         """
         Execute a single tick of the simulation, updating the game state and processing events.
         """
-        game_state.update()
+        game_state.update(self.tick_time)
 
         current_events = self.get_events_in_range(self.simulation_time, self.simulation_time + self.tick_time)
         for event in current_events:
