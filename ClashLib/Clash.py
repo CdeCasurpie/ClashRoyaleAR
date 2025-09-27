@@ -10,6 +10,10 @@ class Board(GameState):
         super().__init__()
         self.board_state = {}  # Aquí iría la representación del estado del tablero
 
+    def path_finder(self, start, goal):
+        # Implementar la lógica de búsqueda de caminos aquí
+        pass
+
     def update(self):
         # Lógica para actualizar el estado del tablero
         pass
