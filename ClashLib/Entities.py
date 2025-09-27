@@ -12,14 +12,15 @@ class Entity(ABC):
     """
     This class represents a generic entity in the game.
     """
-    def __init__(self, x, y, owner):
+    def __init__(self, x, y, owner, entity_type = 'troop'):
         self.x = x
         self.y = y
         self.owner = owner
         self.entity_id = get_next_id()  # Unique incremental ID
         self.active = True
-
-    @abstractmethod
+        self.type = entity_type  # 'troop', 'tower', 'spell', 'projectile', etc.
+        
+    @abstractmethod 
     def update(self, delta_time, entities, path_finder=None):
         """
         Update the entity state.
@@ -56,6 +57,7 @@ class Tower(Entity):
         for entity in entities:
             if entity.owner == self.owner or not entity.active:
                 continue
+
             dx = entity.x - self.x
             dy = entity.y - self.y
             dist = math.hypot(dx, dy)

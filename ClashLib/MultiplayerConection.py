@@ -4,7 +4,7 @@ import socket
 import json
 
 class P2P:
-    def __init__(self, on_receive=None, port=10224, local_test=False):
+    def __init__(self, on_receive=None, on_connect=None, port=10224, local_test=False):
         """
         
         Initializes the P2P connection with optional parameters for receiving data,
@@ -19,14 +19,15 @@ class P2P:
         """
         self.initial_timestamp = None
         self.connected_players = []
-        self.max_players = 2
+        self.max_players = 2 # me and the peer
         self.PORT = port
         self.local_test = local_test
         self.HOST = '127.0.0.1' if local_test else self.get_local_ip()
         self.stop_broadcast = threading.Event()
         self.stop_listening = threading.Event()
         self.time_offset = 0
-        self.on_receive = on_receive  # Función lambda para manejar datos recibidos
+        self.on_receive = on_receive
+        self.on_connect = on_connect
         self.is_host = False
         self.peer_address = None
         self.game_socket = None
@@ -53,6 +54,10 @@ class P2P:
         sock.close()
 
     def start_peer_host(self):
+        self.stop_peer_host()
+        
+        time.sleep(0.5) # wait until previous threads close
+        
         self.is_host = True
         self.stop_broadcast.clear()
         self.stop_listening.clear()
@@ -86,7 +91,10 @@ class P2P:
                     if addr not in self.connected_players:
                         self.connected_players.append(addr)
                         self.peer_address = addr
+                        if self.on_connect:
+                            self.on_connect(addr)
                         print(f"Client connected: {addr}")
+                        self.stop_broadcast.set()  # Dejar de aceptar más conexiones
                         # Iniciar escucha de eventos de juego
                         self.start_game_communication()
             except socket.timeout:
@@ -112,6 +120,8 @@ class P2P:
                 rtt = t3 - t1
                 self.time_offset = host_time - (t1 + rtt / 2)
                 self.peer_address = (host, self.PORT)
+                if self.on_connect:
+                    self.on_connect(addr)
                 print(f"Connected to host {host}, time offset: {self.time_offset:.4f}s")
                 # Iniciar escucha de eventos de juego
                 self.start_game_communication()
@@ -270,13 +280,16 @@ def example_on_receive(data, addr):
         timestamp = data.get('timestamp', 0)
         print(f"Game data: {game_data}, Timestamp: {timestamp:.2f}")
 
+def example_on_connect(addr):
+    print(f"Connected to peer at {addr}")
+
 
 if __name__ == "__main__":
     mode = input("Run as host (h) or client (c)? ").lower()
     local_test = input("Test on same machine? (y/n): ").lower() == 'y'
     
     # Crear P2P con función lambda para manejar datos recibidos
-    p2p = P2P(on_receive=lambda data, addr: example_on_receive(data, addr), local_test=local_test)
+    p2p = P2P(on_receive=lambda data, addr: example_on_receive(data, addr), local_test=local_test, on_connect=example_on_connect)
 
     if mode == "h":
         print("Starting as host...")
