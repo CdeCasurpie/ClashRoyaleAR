@@ -1,6 +1,18 @@
 
 import pygame
 import math
+import random
+
+
+class Card:
+    """
+    This class represents a card in the game. It will contain information about
+    the card type, cost, and any other relevant data.
+    """
+    def __init__(self, card_type, cost_elixir):
+        self.card_type = card_type
+        self.cost_elixir = cost_elixir
+        self.card_id = id(self)
 
 class Menu:
     def set_game_start_time(self, start_time):
@@ -13,14 +25,14 @@ class Menu:
         self.last_update_time = 0
         self.initial_elixir = 7
         self.max_elixir = 10
-        self.maze = self.generate_maze()
-        self.card_list = []
-        self.card_costs = [3, 3, 5, 3]
+        self.deck = self.generate_deck()
+        self.card_list = [] # represents the 4 cards currently shown in the menu
         self.game_start_time = None
         self.generated_elixir = 0  # Elixir total generado desde el inicio
         self.elixir_used = 0  # Elixir total usado en cartas
         self.elixir_wasted = 0  # Elixir desperdiciado por estar en el máximos
         self.seconds_for_one_elixir = 1.5  # Cada 2.8 segundos se genera 1 elixir
+
 
     def update_elixir_synced(self, current_synced_time):
         """
@@ -46,22 +58,57 @@ class Menu:
         self.elixir_wasted = max(0, self.elixir_wasted)
 
 
+    def chords_inside_menu(self, mouse_pos, menu_position, menu_size):
+        """
+        Verifica si las coordenadas del mouse están dentro del área del menú
+        """
+        x, y = menu_position
+        width, height = menu_size
+        return (x <= mouse_pos[0] <= x + width and y <= mouse_pos[1] <= y + height)
+
 
     def use_selected_card(self):
         """
         Usa la carta seleccionada y registra el elixir usado
         """
-        if self.selected_card is not None and self.elixir >= self.card_costs[self.selected_card]:
-            self.elixir_used += self.card_costs[self.selected_card]
-            used_card = self.selected_card
+        if self.selected_card is None:
+            return None
+        
+        card = self.deck[self.selected_card]
+        if self.elixir >= card.cost_elixir:
+            self.elixir -= card.cost_elixir
+            self.elixir_used += card.cost_elixir
+            used_card = card.card_type
             self.selected_card = None
-            print(f"Carta {used_card} usada. Elixir usado total: {self.elixir_used}")
+
             return used_card
+        
         return None
     
 
-    def generate_maze(self):
-        return []
+    def generate_deck(self):
+        """
+        Genera un mazo de 8 cartas aleatorio.
+        """
+
+        allowed_cards = ["Mago", "Caballero", "Mosquetera"]
+        
+        deck = []
+
+        for _ in range(8):
+            card_type = random.choice(allowed_cards)
+            if card_type == "Mago":
+                cost = 5
+            elif card_type == "Caballero":
+                cost = 3
+            elif card_type == "Mosquetera":
+                cost = 4
+            else:
+                cost = 3
+            
+            deck.append(Card(card_type, cost))
+
+        return deck
 
     def draw_rounded_rect(self, surface, color, rect, radius):
         """
@@ -114,7 +161,7 @@ class Menu:
         
         # Número del costo de elixir
         font = pygame.font.Font(None, 28)
-        cost_text = font.render(str(self.card_costs[card_index]), True, (255, 255, 255))
+        cost_text = font.render(str(self.deck[card_index].cost_elixir), True, (255, 255, 255))
         cost_rect = cost_text.get_rect(center=elixir_center)
         screen.blit(cost_text, cost_rect)
 
@@ -229,7 +276,7 @@ class Menu:
         
         # Verificar si el clic está en el área del menú
         if not (x <= mouse_pos[0] <= x + width and y <= mouse_pos[1] <= y + height):
-            return
+            return False
         
         # Calcular en qué carta se hizo clic
         num_cards = 4
@@ -248,10 +295,4 @@ class Menu:
             
             if (card_x <= mouse_pos[0] <= card_x + card_width and 
                 card_y <= mouse_pos[1] <= card_y + card_height):
-                # Verificar si tiene suficiente elixir
-                if self.elixir >= self.card_costs[i]:
-                    self.selected_card = i
-                    print(f"Carta {i} seleccionada (Costo: {self.card_costs[i]})")
-                else:
-                    print(f"No tienes suficiente elixir para la carta {i}")
-                break
+                self.selected_card = i

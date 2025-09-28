@@ -305,7 +305,7 @@ class AreaProjectile(Projectile):
 
 
 class Mosquetera(Troop):
-    def __init__(self, x, y, owner, target, projectile_speed=3.0):
+    def __init__(self, x, y, owner, target=None, projectile_speed=3.0):
         super().__init__(x, y, life=4, owner=owner, damage=1, speed=1.5, range=5, attack_speed=1.5, target=target)
         self.projectile_speed = projectile_speed
 
@@ -314,7 +314,7 @@ class Mosquetera(Troop):
 
 
 class Mago(Troop):
-    def __init__(self, x, y, owner, target, projectile_speed=3.0):
+    def __init__(self, x, y, owner, target=None, projectile_speed=3.0):
         super().__init__(x, y, life=4, owner=owner, damage=1, speed=1.0, range=5, attack_speed=1.0, target=target)
         self.projectile_speed = projectile_speed
 
@@ -327,7 +327,7 @@ class Caballero(Troop):
     This class represents a Caballero troop in the game. It extends the Troop class
     and adds specific attributes for Caballeros.
     """
-    def __init__(self, x, y, owner, target):
+    def __init__(self, x, y, owner, target=None):
         super().__init__(x, y, life=6, owner=owner, damage=1, speed=1.0, range=1, attack_speed=1.0, target=target)
 
     def attack(self, target: Troop):

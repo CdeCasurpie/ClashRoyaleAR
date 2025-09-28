@@ -93,6 +93,7 @@ class P2P:
                         self.peer_address = addr
                         if self.on_connect:
                             self.on_connect(addr)
+                            self.initial_timestamp = time.time()
                         print(f"Client connected: {addr}")
                         self.stop_broadcast.set()  # Dejar de aceptar más conexiones
                         # Iniciar escucha de eventos de juego
@@ -122,6 +123,7 @@ class P2P:
                 self.peer_address = (host, self.PORT)
                 if self.on_connect:
                     self.on_connect(addr)
+                    self.initial_timestamp = time.time()
                 print(f"Connected to host {host}, time offset: {self.time_offset:.4f}s")
                 # Iniciar escucha de eventos de juego
                 self.start_game_communication()

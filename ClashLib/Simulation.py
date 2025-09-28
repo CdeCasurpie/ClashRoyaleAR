@@ -7,7 +7,7 @@ class Event:
     information about the type of event, the time it occurred, and any other
     relevant data.
     """
-    def __init__(self, event_type, timestamp, delay=2): 
+    def __init__(self, event_type, timestamp, delay=2, data=None):
         """
         Un evento representa una acción. Por cuestiones de sincronizacion se le asigna un delay
         para que no se ejecute inmediatamente. Es decir un evento ocurre en su timestamp + delay. Delay
@@ -17,6 +17,33 @@ class Event:
         self.timestamp = timestamp
         self.delay = delay
         self.aparition_time = timestamp + delay
+        self.data = data if data is not None else {}
+
+    def from_json(json_data):
+        try:
+            print(json_data)
+            return Event(
+                event_type=json_data["event_type"],
+                timestamp=json_data["timestamp"],
+                delay=json_data.get("delay", 2),
+                data=json_data.get("data", {})
+            )
+        except KeyError as e:
+            print(f"Missing key in JSON data: {e}")
+        except Exception as e:
+            print(f"Error parsing JSON data: {e}")
+
+        return None
+
+    def to_json(self):
+        return {
+            "event_type": self.event_type,
+            "timestamp": self.timestamp,
+            "delay": self.delay,
+            "aparition_time": self.aparition_time,
+            "data": self.data
+        }
+    
 
 
 class GameState(ABC):
