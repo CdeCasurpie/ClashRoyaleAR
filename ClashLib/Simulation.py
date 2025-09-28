@@ -45,9 +45,9 @@ class GameTimeline(ABC):
         events (list): A list of events that have occurred in the game.
         tick_time (float): The time unit for each step in the simulation (e.g., 1/24 for 24 FPS).
     """
-    def __init__(self):
+    def __init__(self, tick_time=1/24):
         self.simulation_time = 0
-        self.tick_time = 1/24  # 24 FPS
+        self.tick_time = tick_time
         self.events = []
 
     def get_events_in_range(self, start_time, end_time):

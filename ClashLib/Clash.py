@@ -1,9 +1,31 @@
 from ClashLib.Simulation import GameState, GameTimeline, Event
 from ClashLib.MultiplayerConection import P2P
 from ClashLib.Menu import Menu
+from ClashLib.Entities import Entity
+from ClashLib.utils import screen_to_grid
 import pygame
 import sys
 import random
+
+
+class MovementGraph:
+    """
+    This class represents a movement graph for pathfinding. It will contain
+    information about the nodes and edges in the graph.
+    """
+    def __init__(self):
+        self.nodes = {}
+        self.edges = {}
+
+    def add_node(self, node_id, position):
+        self.nodes[node_id] = position
+        self.edges[node_id] = []
+
+    def add_edge(self, from_node, to_node, cost):
+        if from_node in self.edges:
+            self.edges[from_node].append((to_node, cost))
+        else:
+            self.edges[from_node] = [(to_node, cost)]
 
 
 class Board(GameState): 
@@ -16,6 +38,7 @@ class Board(GameState):
         self.width = 18
         self.height = 32
         self.cell_size = 20
+        self.entities: list[Entity] = []
 
     def update(self, tick_time):
         pass
@@ -37,6 +60,13 @@ class Board(GameState):
                 pygame.draw.rect(screen, color, (x, y, self.cell_size, self.cell_size))
         pass
 
+    def position_to_grid(self, position):
+        return screen_to_grid(position, self.cell_size, self.cell_size)
+
+    def add_entity(self, entity: Entity, position):
+        grid_position = self.position_to_grid(position)
+        if grid_position is not None:
+            self.entities.append(entity)
 
 class Card:
     """
@@ -53,8 +83,8 @@ class ClashSimulation(GameTimeline):
     """
     ClashSimulation class that extends GameTimeline to manage the timeline of events specific to Clash Royale.
     """
-    def __init__(self):
-        super().__init__()
+    def __init__(self, tick_time=1/24):
+        super().__init__(tick_time)
 
     def process_event(self, event, game_state):
         """
@@ -75,7 +105,9 @@ class Clash:
         self.board = Board()
         self.simulation = ClashSimulation()
         self.menu = Menu()
-        self.p2p = P2P(local_test=True, on_connect=self.on_connect)
+        self.p2p = P2P(local_test=True, on_connect=self.on_connect, on_receive=self.on_receive)
+        self.total_ticks = 0
+        self.tick_time = 1/24
 
         # Pygame setup
         
@@ -88,11 +120,15 @@ class Clash:
         self.clock = pygame.time.Clock()
         self.running = True
 
+    def on_receive(self, data, addr):
+        print(f"Received data from {addr}: {data}")
+        # Aquí puedes agregar lógica para manejar los datos recibidosx
 
     def on_connect(self, addr):
         print(f"Connected to peer at {addr}")
         self.connected = True
         self.menu.set_game_start_time(self.p2p.get_synced_time())
+        self.total_ticks = 0
 
     def make_connection(self):
         print(f"Making connection for player {self.player_id}")
@@ -130,7 +166,14 @@ class Clash:
 
     def update(self):
         print(f"Updating game state for player {self.player_id}")
-        self.simulation.execute_tick(self.board)
+
+        expected_total_ticks = int((self.p2p.get_synced_time() - self.menu.game_start_time) / self.tick_time)
+        ticks_to_process = expected_total_ticks - self.total_ticks
+        
+        for _ in range(ticks_to_process):
+            self.simulation.execute_tick(self.board)
+            self.total_ticks += 1
+
         
         current_synced_time = self.p2p.get_synced_time()
         self.menu.update_elixir_synced(current_synced_time)
