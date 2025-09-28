@@ -21,14 +21,14 @@ class Entity(ABC):
         self.type = entity_type  # 'troop', 'tower', 'spell', 'projectile', etc.
 
     @abstractmethod 
-    def update(self, delta_time, entities, path_finder=None):
+    def update(self, tick_time, entities, path_finder=None):
         """
         Update the entity state.
         """
         pass
 
     @abstractmethod
-    def execute(self, delta_time):
+    def execute(self, tick_time):
         """
         Execute the entity's action.
         """
@@ -62,7 +62,7 @@ class Tower(Entity):
         closest = None
         min_dist = float('inf')
         for entity in entities:
-            if entity.owner == self.owner or not entity.active:
+            if entity.owner == self.owner or not entity.active or entity.type != 'troop':
                 continue
 
             dx = entity.x - self.x
@@ -79,7 +79,7 @@ class Tower(Entity):
         """
         return Projectile(self.x, self.y, self.owner, speed=5.0, target=target, damage=self.damage)
 
-    def update(self, delta_time, entities, path_finder=None):
+    def update(self, tick_time, entities, path_finder=None):
         if self.life <= 0:
             self.active = False
             return None
@@ -88,8 +88,8 @@ class Tower(Entity):
             self.look_for_target(entities)
 
 
-    def execute(self, delta_time):
-        self.cooldown -= delta_time
+    def execute(self, tick_time):
+        self.cooldown -= tick_time
         projectile = None
         if self.target and self.cooldown <= 0 and self.target.life > 0:
             projectile = self.attack(self.target)
@@ -123,7 +123,7 @@ class Troop(Entity, ABC):
         closest = None
         min_dist = float('inf')
         for entity in entities:
-            if entity.owner == self.owner or not entity.active or entity.type == 'projectile':
+            if entity.owner == self.owner or not entity.active or entity.type != 'troop':
                 continue
             dx = entity.x - self.x
             dy = entity.y - self.y
@@ -149,16 +149,16 @@ class Troop(Entity, ABC):
         dy = target.y - self.y
         return math.hypot(dx, dy) <= self.range
 
-    def move_towards(self, target_x, target_y, delta_time, tolerance=0.05):
+    def move_towards(self, target_x, target_y, tick_time, tolerance=0.05):
         dx = target_x - self.x
         dy = target_y - self.y
         dist = math.hypot(dx, dy)
         if dist > tolerance:
-            self.x += dx / dist * self.speed * delta_time
-            self.y += dy / dist * self.speed * delta_time
+            self.x += dx / dist * self.speed * tick_time
+            self.y += dy / dist * self.speed * tick_time
 
-    def update(self, delta_time, entities, path_finder=None):
-        self.delay -= delta_time
+    def update(self, tick_time, entities, path_finder=None):
+        self.delay -= tick_time
         if self.delay > 0:
             return None
         
@@ -178,16 +178,16 @@ class Troop(Entity, ABC):
             goal = [int(self.target.x), int(self.target.y)]
             self.current_path = path_finder(start, goal)
 
-    def execute(self, delta_time):
+    def execute(self, tick_time):
         projectile = None
         if self.state == "attacking" and self.target and self.target.life > 0:
-            self.cooldown -= delta_time
+            self.cooldown -= tick_time
             if self.cooldown <= 0:
                 projectile = self.attack(self.target)
                 self.cooldown = 1.0 / self.attack_speed
         elif self.state == "moving" and self.current_path:
             next_cell = self.current_path[0]
-            self.move_towards(next_cell[0] + 0.5, next_cell[1] + 0.5, delta_time)
+            self.move_towards(next_cell[0] + 0.5, next_cell[1] + 0.5, tick_time)
             if math.hypot(self.x - (next_cell[0] + 0.5), self.y - (next_cell[1] + 0.5)) < 0.1:
                 self.current_path.pop(0)
         return projectile
@@ -210,13 +210,13 @@ class Spell(Entity):
         self.damage = damage
         self.radius = radius
 
-    def update(self, delta_time, entities=None, path_finder=None):
+    def update(self, tick_time, entities=None, path_finder=None):
         if self.duration <= 0:
             self.active = False
         else:
-            self.duration -= delta_time
+            self.duration -= tick_time
 
-    def execute(self, delta_time):
+    def execute(self, tick_time):
         return None
 
 
@@ -233,23 +233,23 @@ class Projectile(Entity):
         self.max_duration = 5.0
         self.elapsed_time = 0.0
 
-    def move_towards(self, target_x, target_y, delta_time, tolerance=0.05):
+    def move_towards(self, target_x, target_y, tick_time, tolerance=0.05):
         dx = target_x - self.x
         dy = target_y - self.y
         dist = math.hypot(dx, dy)
         if dist > tolerance:
-            self.x += dx / dist * self.speed * delta_time
-            self.y += dy / dist * self.speed * delta_time
+            self.x += dx / dist * self.speed * tick_time
+            self.y += dy / dist * self.speed * tick_time
 
-    def update(self, delta_time, entities=None, path_finder=None):
+    def update(self, tick_time, entities=None, path_finder=None):
         pass
 
-    def execute(self, delta_time):
+    def execute(self, tick_time):
         if not self.active or not self.target:
             return
         
-        self.elapsed_time += delta_time
-        self.move_towards(self.target.x, self.target.y, delta_time)
+        self.elapsed_time += tick_time
+        self.move_towards(self.target.x, self.target.y, tick_time)
 
         dx = self.target.x - self.x
         dy = self.target.y - self.y
@@ -270,7 +270,7 @@ class AreaProjectile(Projectile):
         self.radius = radius
         self.troops_hit : list[Troop] = []
 
-    def update(self, delta_time, entities, path_finder=None):
+    def update(self, tick_time, entities, path_finder=None):
         # calcula cuanto avanza y si ya esta muy cerca dle obejtivo llena trops_hit
         dx = self.target.x - self.x
         dy = self.target.y - self.y
@@ -284,17 +284,17 @@ class AreaProjectile(Projectile):
         
 
 
-    def execute(self, delta_time):
+    def execute(self, tick_time):
         if not self.active or not self.target:
             return
 
-        self.elapsed_time += delta_time
+        self.elapsed_time += tick_time
 
         if self.elapsed_time > self.max_duration:
             self.active = False
             return
 
-        self.move_towards(self.target.x, self.target.y, delta_time)
+        self.move_towards(self.target.x, self.target.y, tick_time)
         dx = self.target.x - self.x
         dy = self.target.y - self.y
         if math.hypot(dx, dy) < 0.05:
@@ -335,4 +335,5 @@ class Caballero(Troop):
             target.receive_damage(self.damage)
             if target.life < 0:
                 target.life = 0
+        return None
 
