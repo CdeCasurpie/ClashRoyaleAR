@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import math
 from enum import Enum
+import pygame
 
 # ID global
 _next_entity_id = 0
@@ -36,6 +37,10 @@ class Entity(ABC):
         0 <= x < map_width
         0 <= y < map_height
         """
+        # si las coordenadas salen de los limites del mapa, lanzamos un error
+
+        if cell_x < 0 or cell_x >= 18 or cell_y < 0 or cell_y >= 32:
+            raise ValueError("Coordinates are out of bounds.")
         self.x = cell_x + 0.5
         self.y = cell_y + 0.5
         self.owner = owner
@@ -81,18 +86,43 @@ class Entity(ABC):
         """
         pass
 
-    def execute(self, tick_time):
+    @abstractmethod
+    def execute(self, tick_time, obstacles, add_entity):
         """
         Execute the entity's action.
         """
         pass
 
-    @abstractmethod
-    def render(self, screen):
+    def render(self, screen, cell_size=20):
         """
         Render the entity on the given screen.
         """
-        pass
+
+        screen_position = self.get_screen_position(cell_size)
+
+        radius = 10
+
+
+        # si es id1 dibujar un circulo azul, si es id2 dibujar un circulo rojo
+        if (self.owner == 1 or self.owner == '1'):
+            pygame.draw.circle(screen, (0, 0, 255), (int(screen_position[0]), int(screen_position[1])), radius)
+        elif (self.owner == 2 or self.owner == '2'):
+            pygame.draw.circle(screen, (255, 0, 0), (int(screen_position[0]), int(screen_position[1])), radius)
+        
+
+        font = pygame.font.Font(None, 24)
+        text = font.render(f"{self.entity_id}", True, (255, 255, 255))
+        text_rect = text.get_rect(center=(int(screen_position[0]), int(screen_position[1])))
+        screen.blit(text, text_rect)
+
+        #renderizar el player id
+        p_text = font.render(f"P{self.owner}", True, (255, 255, 0))
+        p_text_rect = p_text.get_rect(center=(int(screen_position[0]), int(screen_position[1]) + 12))
+        screen.blit(p_text, p_text_rect)
+
+
+
+
 
 
 class Tower(Entity):
@@ -159,7 +189,7 @@ class Tower(Entity):
         self.look_for_target(entities)
 
 
-    def execute(self, tick_time, add_entity):
+    def execute(self, tick_time, obstacles, add_entity):
         self.cooldown -= tick_time
         if self.target and self.cooldown <= 0 and self.target.life > 0:
             self.attack(add_entity=add_entity)
@@ -224,8 +254,8 @@ class Troop(Entity, ABC):
     
     def get_valid_waypoints(self, obstacles, map_width = 18, map_height = 32):
         muajaja = []
-        for i in range(-1, 1):
-            for j in range(-1, 1):
+        for i in range(-1, 2):
+            for j in range(-1, 2):
                 if i == 0 and j == 0:
                     continue
                 new_x = int(self.x) + i 
@@ -239,8 +269,9 @@ class Troop(Entity, ABC):
     def get_target_waypoint(self, obstacles):
         if not self.target:
             return
-    
+        
         valid_waypoint = self.get_valid_waypoints(obstacles)
+
         target_wp = None
         min_dist = float('inf')
         for wp in valid_waypoint:
@@ -290,6 +321,10 @@ class Troop(Entity, ABC):
         else:
             self.state = StateType.MOVING
 
+        if self.target and (self.target.life <= 0 or not self.target.active):
+            self.target = None
+            self.state = StateType.MOVING
+
         self.look_for_target(entities)
 
     def execute(self, tick_time, obstacles, add_entity):
@@ -306,6 +341,25 @@ class Troop(Entity, ABC):
         self.life -= amount
         if self.life <= 0:
             self.active = False
+
+    def render(self, screen, cell_size):
+        super().render(screen, cell_size)
+
+        # dibujar una linea con una flecha hacia su target
+        if self.target and self.target.active:
+            start_pos = self.get_screen_position(cell_size)
+            end_pos = self.target.get_screen_position(cell_size)
+            pygame.draw.line(screen, (255, 255, 0), start_pos, end_pos, 2)
+            # dibujar una flecha en la punta
+            angle = math.atan2(end_pos[1] - start_pos[1], end_pos[0] - start_pos[0])
+            arrow_size = 5
+            arrow_angle = math.pi / 6
+            arrow_point1 = (end_pos[0] - arrow_size * math.cos(angle - arrow_angle),
+                            end_pos[1] - arrow_size * math.sin(angle - arrow_angle))
+            arrow_point2 = (end_pos[0] - arrow_size * math.cos(angle + arrow_angle),
+                            end_pos[1] - arrow_size * math.sin(angle + arrow_angle))
+            pygame.draw.polygon(screen, (255, 255, 0), [end_pos, arrow_point1, arrow_point2])
+        pass
 
 
 class Spell(Entity):
@@ -325,7 +379,7 @@ class Spell(Entity):
         else:
             self.duration -= tick_time
 
-    def execute(self, tick_time):
+    def execute(self, tick_time, obstacles, add_entity):
         return None
 
 
@@ -354,6 +408,9 @@ class Projectile(Entity):
             self.reached_target = True
             try_dist = max_dist
 
+        if max_dist < 1e-6:
+            return
+
         self.x += dx / max_dist * try_dist
         self.y += dy / max_dist * try_dist
 
@@ -361,7 +418,7 @@ class Projectile(Entity):
         self.target_pos = (self.target.x, self.target.y) if self.target else self.target_pos
 
 
-    def execute(self, tick_time):
+    def execute(self, tick_time, obstacles, add_entity):
         if not self.active:
             return
         
@@ -376,6 +433,12 @@ class Projectile(Entity):
             self.active = False
         if self.elapsed_time > self.max_duration:
             self.active = False
+        
+    def render(self, screen, cell_size=20):
+        # dibujar una bolita pequeña negra
+        screen_position = self.get_screen_position(cell_size)
+        radius = 4
+        pygame.draw.circle(screen, (50,50,50), (int(screen_position[0]), int(screen_position[1])), radius)
 
 class AreaProjectile(Projectile):
     """
@@ -400,28 +463,33 @@ class AreaProjectile(Projectile):
                             self.troops_hit.append(entity)
         
 
-    def execute(self, tick_time):
-        if not self.active or not self.target:
+    def execute(self, tick_time, obstacles, add_entity):
+        if not self.active:
             return
-
+        
         self.elapsed_time += tick_time
+        self.move_towards(tick_time)
 
+        dx = self.target_pos[0] - self.x
+        dy = self.target_pos[1] - self.y
+
+        if (math.hypot(dx, dy) < 0.05 or self.reached_target):
+            for troop in self.troops_hit:
+                if troop.active:
+                    troop.receive_damage(self.damage)
+            self.active = False
         if self.elapsed_time > self.max_duration:
             self.active = False
-            return
-
-        self.move_towards(self.target.x, self.target.y, tick_time)
-        dx = self.target.x - self.x
-        dy = self.target.y - self.y
-        if math.hypot(dx, dy) < 0.05:
-            for entity in self.troops_hit:
-                if math.hypot(entity.x - self.x, entity.y - self.y) <= self.radius:
-                    entity.receive_damage(self.damage)
-            self.active = False
+    
+    def render(self, screen, cell_size=20):
+        # dibujar una bolita grande naranja
+        screen_position = self.get_screen_position(cell_size)
+        radius = 18
+        pygame.draw.circle(screen, (255,165,0), (int(screen_position[0]), int(screen_position[1])), radius, 2)
 
 
 class Mosquetera(Troop):
-    def __init__(self, cell_x, cell_y, owner, target=None, projectile_speed=3.0):
+    def __init__(self, cell_x, cell_y, owner, target=None, projectile_speed=15.0):
         super().__init__(cell_x=cell_x, cell_y=cell_y, life=721, owner=owner, damage=217, speed=1.0, range=6, hit_speed=1.0, target=target)
         self.projectile_speed = projectile_speed
 
@@ -430,9 +498,51 @@ class Mosquetera(Troop):
         if add_entity:
             add_entity(P)
         return P
+    
+    def render(self, screen, cell_size):
+        screen_pos = self.get_screen_position(cell_size)
+        x, y = int(screen_pos[0]), int(screen_pos[1])
+        
+        # Color base según el jugador
+        base_color = (100, 150, 255) if self.owner in [1, '1'] else (255, 100, 100)
+        dark_color = (50, 100, 200) if self.owner in [1, '1'] else (200, 50, 50)
+        
+        # Cuerpo (vestido triangular)
+        body_points = [(x, y - 8), (x - 6, y + 6), (x + 6, y + 6)]
+        pygame.draw.polygon(screen, base_color, body_points)
+        pygame.draw.polygon(screen, dark_color, body_points, 2)
+        
+        # Cabeza
+        pygame.draw.circle(screen, (255, 220, 177), (x, y - 10), 4)
+        pygame.draw.circle(screen, (0, 0, 0), (x, y - 10), 4, 1)
+        
+        # Cabello (ponytail)
+        pygame.draw.circle(screen, (139, 69, 19), (x - 4, y - 11), 3)
+        pygame.draw.circle(screen, (139, 69, 19), (x + 4, y - 11), 3)
+        
+        # Arma (mosquete)
+        weapon_angle = -45 if self.owner in [1, '1'] else 45
+        weapon_end_x = x + 8 * math.cos(math.radians(weapon_angle))
+        weapon_end_y = y + 8 * math.sin(math.radians(weapon_angle))
+        pygame.draw.line(screen, (80, 50, 30), (x + 2, y), (weapon_end_x, weapon_end_y), 3)
+        
+        # Barra de vida
+        self._render_health_bar(screen, x, y - 18, cell_size)
+
+    def _render_health_bar(self, screen, x, y, cell_size):
+        bar_width = 20
+        bar_height = 3
+        health_percent = max(0, self.life / self.max_life)
+        
+        # Fondo de la barra
+        pygame.draw.rect(screen, (50, 50, 50), (x - bar_width//2, y, bar_width, bar_height))
+        # Barra de vida
+        health_color = (0, 255, 0) if health_percent > 0.5 else (255, 255, 0) if health_percent > 0.25 else (255, 0, 0)
+        pygame.draw.rect(screen, health_color, (x - bar_width//2, y, int(bar_width * health_percent), bar_height))
+
 
 class Mago(Troop):
-    def __init__(self, cell_x, cell_y, owner, target=None, projectile_speed=3.0):
+    def __init__(self, cell_x, cell_y, owner, target=None, projectile_speed=10.0):
         super().__init__(cell_x=cell_x, cell_y=cell_y, life=755, owner=owner, damage=281, speed=1.0, range=5.5, hit_speed=1.4, target=target)
         self.projectile_speed = projectile_speed
 
@@ -441,6 +551,52 @@ class Mago(Troop):
         if add_entity:
             add_entity(P)
         return P
+    
+    def render(self, screen, cell_size):
+        screen_pos = self.get_screen_position(cell_size)
+        x, y = int(screen_pos[0]), int(screen_pos[1])
+        
+        # Color mágico según el jugador
+        magic_color = (138, 43, 226) if self.owner in [1, '1'] else (255, 20, 147)
+        robe_color = (75, 0, 130) if self.owner in [1, '1'] else (139, 0, 69)
+        
+        # Túnica (cuerpo)
+        robe_points = [(x, y - 8), (x - 7, y + 7), (x + 7, y + 7)]
+        pygame.draw.polygon(screen, robe_color, robe_points)
+        pygame.draw.polygon(screen, magic_color, robe_points, 2)
+        
+        # Cabeza
+        pygame.draw.circle(screen, (255, 220, 177), (x, y - 10), 4)
+        pygame.draw.circle(screen, (0, 0, 0), (x, y - 10), 4, 1)
+        
+        # Sombrero puntiagudo de mago
+        hat_points = [(x - 5, y - 13), (x, y - 22), (x + 5, y - 13)]
+        pygame.draw.polygon(screen, robe_color, hat_points)
+        pygame.draw.polygon(screen, magic_color, hat_points, 1)
+        
+        # Estrella mágica en el sombrero
+        star_y = y - 17
+        pygame.draw.circle(screen, (255, 255, 100), (x, star_y), 2)
+        
+        # Báculo mágico
+        staff_end_y = y + 10
+        pygame.draw.line(screen, (139, 90, 43), (x - 5, y - 3), (x - 5, staff_end_y), 2)
+        # Orbe mágico en la punta
+        pygame.draw.circle(screen, magic_color, (x - 5, y - 5), 3)
+        pygame.draw.circle(screen, (255, 255, 255), (x - 5, y - 5), 3, 1)
+        
+        # Barra de vida
+        self._render_health_bar(screen, x, y - 25, cell_size)
+
+    def _render_health_bar(self, screen, x, y, cell_size):
+        bar_width = 20
+        bar_height = 3
+        health_percent = max(0, self.life / self.max_life)
+        
+        pygame.draw.rect(screen, (50, 50, 50), (x - bar_width//2, y, bar_width, bar_height))
+        health_color = (0, 255, 0) if health_percent > 0.5 else (255, 255, 0) if health_percent > 0.25 else (255, 0, 0)
+        pygame.draw.rect(screen, health_color, (x - bar_width//2, y, int(bar_width * health_percent), bar_height))
+
 
 class Caballero(Troop):
     """
@@ -453,4 +609,63 @@ class Caballero(Troop):
     def attack(self, target, add_entity=None):
         if target.life > 0:
             target.receive_damage(self.damage)
+    
+    def render(self, screen, cell_size):
+        screen_pos = self.get_screen_position(cell_size)
+        x, y = int(screen_pos[0]), int(screen_pos[1])
+        
+        # Colores según el jugador
+        armor_color = (192, 192, 192) if self.owner in [1, '1'] else (169, 169, 169)
+        accent_color = (0, 100, 200) if self.owner in [1, '1'] else (200, 0, 0)
+        
+        # Cuerpo del caballero (rectángulo para armadura)
+        pygame.draw.rect(screen, armor_color, (x - 6, y - 4, 12, 10))
+        pygame.draw.rect(screen, (100, 100, 100), (x - 6, y - 4, 12, 10), 1)
+        
+        # Detalles de armadura (líneas)
+        pygame.draw.line(screen, accent_color, (x - 4, y - 2), (x - 4, y + 4), 1)
+        pygame.draw.line(screen, accent_color, (x + 4, y - 2), (x + 4, y + 4), 1)
+        
+        # Cabeza con casco
+        pygame.draw.circle(screen, armor_color, (x, y - 9), 5)
+        pygame.draw.circle(screen, (100, 100, 100), (x, y - 9), 5, 1)
+        
+        # Visera del casco
+        pygame.draw.rect(screen, (50, 50, 50), (x - 3, y - 10, 6, 3))
+        
+        # Penacho en el casco
+        plume_points = [(x - 1, y - 14), (x, y - 17), (x + 1, y - 14)]
+        pygame.draw.polygon(screen, accent_color, plume_points)
+        
+        # Escudo
+        shield_x = x - 8
+        shield_points = [
+            (shield_x, y - 3),
+            (shield_x - 3, y),
+            (shield_x - 3, y + 4),
+            (shield_x, y + 6),
+            (shield_x + 3, y + 4),
+            (shield_x + 3, y)
+        ]
+        pygame.draw.polygon(screen, accent_color, shield_points)
+        pygame.draw.polygon(screen, (255, 215, 0), shield_points, 1)
+        
+        # Espada
+        sword_x = x + 8
+        pygame.draw.line(screen, (200, 200, 200), (sword_x, y - 2), (sword_x, y + 8), 3)
+        # Empuñadura
+        pygame.draw.line(screen, (139, 69, 19), (sword_x - 2, y), (sword_x + 2, y), 3)
+        # Pomo
+        pygame.draw.circle(screen, (255, 215, 0), (sword_x, y + 9), 2)
+        
+        # Barra de vida
+        self._render_health_bar(screen, x, y - 20, cell_size)
 
+    def _render_health_bar(self, screen, x, y, cell_size):
+        bar_width = 24
+        bar_height = 4
+        health_percent = max(0, self.life / self.max_life)
+        
+        pygame.draw.rect(screen, (50, 50, 50), (x - bar_width//2, y, bar_width, bar_height))
+        health_color = (0, 255, 0) if health_percent > 0.5 else (255, 255, 0) if health_percent > 0.25 else (255, 0, 0)
+        pygame.draw.rect(screen, health_color, (x - bar_width//2, y, int(bar_width * health_percent), bar_height))

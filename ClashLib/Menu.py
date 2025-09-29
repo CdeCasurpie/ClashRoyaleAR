@@ -165,6 +165,12 @@ class Menu:
         cost_rect = cost_text.get_rect(center=elixir_center)
         screen.blit(cost_text, cost_rect)
 
+        # Nombre de la carta provisional en el centro
+        font = pygame.font.Font(None, 24)
+        name_text = font.render(self.deck[card_index].card_type, True, (255, 255, 255))
+        name_rect = name_text.get_rect(center=(x + width // 2, y + height // 2))
+        screen.blit(name_text, name_rect)   
+
     def render(self, screen, position=(0, 32*20), size=(18*20, 8*20)):
         """
         Renderiza el menú con el diseño correcto

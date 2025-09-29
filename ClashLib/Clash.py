@@ -7,27 +7,6 @@ import pygame
 import sys
 import random
 
-
-class MovementGraph:
-    """
-    This class represents a movement graph for pathfinding. It will contain
-    information about the nodes and edges in the graph.
-    """
-    def __init__(self):
-        self.nodes = {}
-        self.edges = {}
-
-    def add_node(self, node_id, position):
-        self.nodes[node_id] = position
-        self.edges[node_id] = []
-
-    def add_edge(self, from_node, to_node, cost):
-        if from_node in self.edges:
-            self.edges[from_node].append((to_node, cost))
-        else:
-            self.edges[from_node] = [(to_node, cost)]
-
-
 class Board(GameState): 
     """
     Board class that extends GameState to represent the state of the game board in Clash Royale. 
@@ -41,10 +20,28 @@ class Board(GameState):
         self.cell_size = 20
         self.entities: list[Entity] = []
         self.player_id = player_id
+        self.new_entities = []
+        self.obstacles = [] # future use for pathfinding
 
+    def add_new_entity(self, entity):
+        self.new_entities.append(entity)
 
     def update(self, tick_time):
-        pass
+        # update de todos
+        for entity in self.entities:
+            entity.update(tick_time, self.entities)        
+
+        # excecute de todos
+        for entity in self.entities:
+            entity.execute(tick_time, self.obstacles, self.add_new_entity)
+
+        # eliminar los inactivos
+        self.entities = [e for e in self.entities if e.active]
+
+        # añadir nuevas entidades generadas
+        if self.new_entities:
+            self.entities.extend(self.new_entities)
+            self.new_entities = []
 
     def render(self, screen):
         for x in range(0, self.width * self.cell_size, self.cell_size):
@@ -63,27 +60,16 @@ class Board(GameState):
                 pygame.draw.rect(screen, color, (x, y, self.cell_size, self.cell_size))
         
 
-        # render entities with a circle for now
         for entity in self.entities:
-            color = (0, 0, 255) if entity.owner == "1" else (255, 0, 0)
-            posx = entity.x
-            posy = entity.y
-            print(f"Rendering entity at ({posx}, {posy})")
-            pygame.draw.circle(screen, color, (int(posx), int(posy)), self.cell_size // 2 - 2)
+            entity.render(screen, cell_size=self.cell_size)
 
     def position_to_grid(self, position):
         return screen_to_grid(position[0], position[1], self.cell_size)
     
 
-    def from_grid_to_position(self, grid_position):
-        if grid_position is None:
-            return None
-        return (grid_position[0] * self.cell_size + self.cell_size // 2,
-                grid_position[1] * self.cell_size + self.cell_size // 2)
-
 
     def create_entity_by_type(self, entity_type, position):
-        float_pos = self.from_grid_to_position(position)
+        float_pos = (position[0], position[1])
         if entity_type == "Caballero":
             return Caballero(float_pos[0], float_pos[1], self.player_id)
         elif entity_type == "Mago":
@@ -148,7 +134,7 @@ class Clash:
         self.board = Board()
         self.simulation = ClashSimulation(tick_time=self.tick_time)
         self.menu = Menu()
-        self.p2p = P2P(local_test=False, on_connect=self.on_connect, on_receive=self.on_receive)
+        self.p2p = P2P(local_test=True, on_connect=self.on_connect, on_receive=self.on_receive)
         self.total_ticks = 0
         self.initial_timestamp = None
 
@@ -232,7 +218,7 @@ class Clash:
     def handle_menu_click(self, mouse_pos):
         self.menu.handle_click(mouse_pos, (0, self.board.height*20), (self.board.width*20, 8*20))
 
-    def _inputs(self):
+    def handle_inputs(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -240,6 +226,8 @@ class Clash:
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 mouse_pos = pygame.mouse.get_pos()
                 grid_pos = self.board.position_to_grid(mouse_pos)
+
+                print(grid_pos)
 
                 if self.menu.chords_inside_menu(mouse_pos, (0, self.board.height*20), (self.board.width*20, 8*20)):
                     self.handle_menu_click(mouse_pos)
