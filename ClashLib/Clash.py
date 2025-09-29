@@ -148,7 +148,7 @@ class Clash:
         self.board = Board()
         self.simulation = ClashSimulation(tick_time=self.tick_time)
         self.menu = Menu()
-        self.p2p = P2P(local_test=True, on_connect=self.on_connect, on_receive=self.on_receive)
+        self.p2p = P2P(local_test=False, on_connect=self.on_connect, on_receive=self.on_receive)
         self.total_ticks = 0
         self.initial_timestamp = None
 
@@ -232,7 +232,7 @@ class Clash:
     def handle_menu_click(self, mouse_pos):
         self.menu.handle_click(mouse_pos, (0, self.board.height*20), (self.board.width*20, 8*20))
 
-    def handle_inputs(self):
+    def _inputs(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
