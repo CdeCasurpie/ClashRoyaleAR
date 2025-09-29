@@ -1,7 +1,7 @@
 from ClashLib.Simulation import GameState, GameTimeline, Event
 from ClashLib.MultiplayerConection import P2P
 from ClashLib.Menu import Menu
-from ClashLib.Entities import Entity, Caballero, Mago, Mosquetera
+from ClashLib.Entities import Entity, Caballero, Mago, Mosquetera, Tower, TowerType
 from ClashLib.utils import screen_to_grid
 import pygame
 import sys
@@ -21,7 +21,97 @@ class Board(GameState):
         self.entities: list[Entity] = []
         self.player_id = player_id
         self.new_entities = []
-        self.obstacles = [] # future use for pathfinding
+        self.obstacles = set()  # Set de coordenadas de celdas bloqueadas
+        
+        # Inicializar obstáculos y torres
+        self.setup_obstacles()
+        self.setup_towers()
+
+    def setup_obstacles(self):
+        """
+        Configura los obstáculos del mapa: agua y torres.
+        Las coordenadas son en formato (columna, fila) o (x, y) en la grid.
+        """
+        # Limpiar obstáculos previos
+        self.obstacles.clear()
+        
+        # AGUA (Río) - filas 15 y 16 (2 casillas de altura)
+        for fila in range(15, 17):  # filas 15, 16
+            for columna in range(18):
+                # Excluir puentes
+                # Puente izquierdo: columnas 2-4
+                # Puente derecho: columnas 13-15
+                if not ((columna >= 2 and columna <= 4) or (columna >= 13 and columna <= 15)):
+                    self.obstacles.add((columna, fila))
+        
+        # TORRES SUPERIORES (Jugador 1)
+        # Torre principal superior: 4x4, filas 1-4, columnas 7-10
+        for fila in range(1, 5):
+            for columna in range(7, 11):
+                self.obstacles.add((columna, fila))
+        
+        # Torre izquierda superior: 3x3, filas 5-7, columnas 2-4
+        for fila in range(5, 8):
+            for columna in range(2, 5):
+                self.obstacles.add((columna, fila))
+        
+        # Torre derecha superior: 3x3, filas 5-7, columnas 13-15
+        for fila in range(5, 8):
+            for columna in range(13, 16):
+                self.obstacles.add((columna, fila))
+        
+        # TORRES INFERIORES (Jugador 2)
+        # Torre principal inferior: 4x4, filas 27-30, columnas 7-10
+        for fila in range(27, 31):
+            for columna in range(7, 11):
+                self.obstacles.add((columna, fila))
+        
+        # Torre izquierda inferior: 3x3, filas 24-26, columnas 2-4
+        for fila in range(24, 27):
+            for columna in range(2, 5):
+                self.obstacles.add((columna, fila))
+        
+        # Torre derecha inferior: 3x3, filas 24-26, columnas 13-15
+        for fila in range(24, 27):
+            for columna in range(13, 16):
+                self.obstacles.add((columna, fila))
+
+    def setup_towers(self):
+        """
+        Crea las entidades de torres en el tablero.
+        """
+        # Torres del jugador 1 (superior)
+        torre_principal_sup = Tower(8, 2, owner="1", tower_type=TowerType.CENTRAL)
+        torre_izq_sup = Tower(3, 6, owner="1", tower_type=TowerType.LATERAL)
+        torre_der_sup = Tower(14, 6, owner="1", tower_type=TowerType.LATERAL)
+        
+        # Torres del jugador 2 (inferior)
+        torre_principal_inf = Tower(8, 28, owner="2", tower_type=TowerType.CENTRAL)
+        torre_izq_inf = Tower(3, 25, owner="2", tower_type=TowerType.LATERAL)
+        torre_der_inf = Tower(14, 25, owner="2", tower_type=TowerType.LATERAL)
+        
+        # Agregar torres a las entidades
+        self.entities.extend([
+            torre_principal_sup, torre_izq_sup, torre_der_sup,
+            torre_principal_inf, torre_izq_inf, torre_der_inf
+        ])
+
+    def is_valid_placement(self, grid_position):
+        """
+        Verifica si una posición es válida para colocar una carta.
+        Retorna True si es válida, False si no.
+        """
+        columna, fila = grid_position
+        
+        # Verificar límites del tablero
+        if columna < 0 or columna >= self.width or fila < 0 or fila >= self.height:
+            return False
+        
+        # Verificar si está en un obstáculo
+        if (columna, fila) in self.obstacles:
+            return False
+        
+        return True
 
     def add_new_entity(self, entity):
         self.new_entities.append(entity)
@@ -44,29 +134,58 @@ class Board(GameState):
             self.new_entities = []
 
     def render(self, screen):
-        for x in range(0, self.width * self.cell_size, self.cell_size):
-            for y in range(0, self.height * self.cell_size, self.cell_size):
-                color = (163,197,71) if (x // self.cell_size + y // self.cell_size) % 2 == 0 else (174, 206, 77)
-
-
-                color_variation = 2
-                random.seed(x^2+y^2)
-                color = (
-                    random.randint(max(0, color[0] - color_variation), min(255, color[0] + color_variation)),
-                    random.randint(max(0, color[1] - color_variation), min(255, color[1] + color_variation)),
-                    random.randint(max(0, color[2] - color_variation), min(255, color[2] + color_variation))
-                )
-
+        """
+        Renderiza el tablero con césped, agua, puentes y torres.
+        """
+        for fila in range(self.height):
+            for columna in range(self.width):
+                x = columna * self.cell_size
+                y = fila * self.cell_size
+                
+                # Determinar el tipo de celda
+                es_rio = 15 <= fila <= 16
+                es_puente = es_rio and ((2 <= columna <= 4) or (13 <= columna <= 15))
+                es_torre = (columna, fila) in self.obstacles and not (es_rio and not es_puente)
+                
+                # Color base
+                if es_torre:
+                    # Torres en morado/naranja
+                    if ((1 <= fila <= 4 and 7 <= columna <= 10) or 
+                        (27 <= fila <= 30 and 7 <= columna <= 10)):
+                        color = (156, 39, 176)  # Morado para torres principales
+                    else:
+                        color = (255, 152, 0)  # Naranja para torres laterales
+                elif es_rio and not es_puente:
+                    # Agua en azul
+                    color = (33, 150, 243)
+                else:
+                    # Césped - patrón de tablero de ajedrez
+                    if (columna + fila) % 2 == 0:
+                        color = (163, 197, 71)
+                    else:
+                        color = (174, 206, 77)
+                    
+                    # Variación de color para más naturalidad
+                    color_variation = 2
+                    random.seed(x^2 + y^2)
+                    color = (
+                        random.randint(max(0, color[0] - color_variation), min(255, color[0] + color_variation)),
+                        random.randint(max(0, color[1] - color_variation), min(255, color[1] + color_variation)),
+                        random.randint(max(0, color[2] - color_variation), min(255, color[2] + color_variation))
+                    )
+                
+                # Dibujar celda
                 pygame.draw.rect(screen, color, (x, y, self.cell_size, self.cell_size))
+                
+                # Dibujar borde sutil
+                pygame.draw.rect(screen, (100, 100, 100), (x, y, self.cell_size, self.cell_size), 1)
         
-
+        # Renderizar entidades
         for entity in self.entities:
             entity.render(screen, cell_size=self.cell_size)
 
     def position_to_grid(self, position):
         return screen_to_grid(position[0], position[1], self.cell_size)
-    
-
 
     def create_entity_by_type(self, entity_type, position):
         float_pos = (position[0], position[1])
@@ -79,15 +198,12 @@ class Board(GameState):
         else: 
             return None
 
-        
-
     def add_entity(self, entity_type, grid_position):
         print(f"Adding entity of type {entity_type} at grid position {grid_position}")
         entity = self.create_entity_by_type(entity_type, grid_position)
         if entity is not None:
             print(f"Entity created: {entity}")
             self.entities.append(entity)
-
 
 
 
@@ -195,25 +311,37 @@ class Clash:
         return self.initial_timestamp
 
     def handle_board_click(self, grid_pos):
-        # board clicked
-        used_card = self.menu.use_selected_card()
-        if used_card is not None:
-            # crear evento 
-            event = Event(event_type="spawn_unit", 
-                            timestamp=self.p2p.get_synced_time() - self.get_initial_timestamp(),
-                            delay=0.2,
-                            data= {
-                            "entity_type": used_card,
-                            "grid_position": grid_pos,
-                            "player_id": self.player_id
-                            })
+            """
+            Maneja el clic en el tablero.
+            Verifica que la posición sea válida antes de colocar la carta.
+            """
+            # Verificar si la posición es válida
+            if not self.board.is_valid_placement(grid_pos):
+                print(f"Posición inválida: {grid_pos}. No se puede colocar carta aquí.")
+                # Opcionalmente, puedes deseleccionar la carta
+                self.menu.selected_card = None
+                return
             
+            # Intentar usar la carta seleccionada
+            used_card = self.menu.use_selected_card()
+            if used_card is not None:
+                # crear evento 
+                event = Event(event_type="spawn_unit", 
+                                timestamp=self.p2p.get_synced_time() - self.get_initial_timestamp(),
+                                delay=0.2,
+                                data= {
+                                "entity_type": used_card,
+                                "grid_position": grid_pos,
+                                "player_id": self.player_id
+                                })
+                
+                # TODO: Crear evento de tipo "placeholder_unit" que se ponga directamente en el board y desaparesca en el aparition time.
 
-            # TODO: Crear evento de tipo "placeholder_unit" que se ponga directamente en el board y desaparesca en el aparition time.
-
-            self.p2p.send_data(event.to_json())
-            self.simulation.add_event(event)
-            pass
+                self.p2p.send_data(event.to_json())
+                self.simulation.add_event(event)
+                print(f"Carta {used_card} colocada en {grid_pos}")
+            else:
+                print("No hay carta seleccionada o no hay suficiente elixir")
 
     def handle_menu_click(self, mouse_pos):
         self.menu.handle_click(mouse_pos, (0, self.board.height*20), (self.board.width*20, 8*20))
