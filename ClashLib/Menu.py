@@ -20,7 +20,7 @@ class Menu:
         self.game_start_time = start_time
         self.elixir = 7
 
-    def __init__(self):
+    def __init__(self, player_id):
         self.selected_card = None
         self.last_update_time = 0
         self.initial_elixir = 7
@@ -31,7 +31,19 @@ class Menu:
         self.generated_elixir = 0  # Elixir total generado desde el inicio
         self.elixir_used = 0  # Elixir total usado en cartas
         self.elixir_wasted = 0  # Elixir desperdiciado por estar en el máximos
-        self.seconds_for_one_elixir = 1.5  # Cada 2.8 segundos se genera 1 elixir
+        self.seconds_for_one_elixir = 2.8  # Cada 2.8 segundos se genera 1 elixir
+        self.player_id = player_id
+
+    
+    def render_danger_area(self, screen):
+        # Dibujar un rectángulo rojo semitransparente en la mitad que no corresponde al jugador
+        # el rectangulo debe estar con margen y con border radius
+        overlay = pygame.Surface((18*20, 32*20), pygame.SRCALPHA)
+        overlay.fill((255, 0, 0, 30))  # Rojo con transparencia
+        if self.player_id == "2":
+            screen.blit(overlay, (0, 0), area=pygame.Rect(0, 0, 18*20, 16*20 - 10))
+        else:
+            screen.blit(overlay, (0, 16*20 + 10), area=pygame.Rect(0, 16*20 + 10, 18*20, 16*20 - 10))
 
 
     def update_elixir_synced(self, current_synced_time):
@@ -171,6 +183,7 @@ class Menu:
         name_rect = name_text.get_rect(center=(x + width // 2, y + height // 2))
         screen.blit(name_text, name_rect)   
 
+
     def render(self, screen, position=(0, 32*20), size=(18*20, 8*20)):
         """
         Renderiza el menú con el diseño correcto
@@ -208,6 +221,9 @@ class Menu:
         
         # Contador de elixir centrado en la parte inferior
         self.render_elixir_counter(screen, x, y, width, height)
+        
+        if self.selected_card is not None: 
+            self.render_danger_area(screen)
 
     def render_elixir_counter(self, screen, menu_x, menu_y, menu_width, menu_height):
         """

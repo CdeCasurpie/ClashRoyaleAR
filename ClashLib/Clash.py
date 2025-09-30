@@ -21,11 +21,47 @@ class Board(GameState):
         self.entities: list[Entity] = []
         self.player_id = player_id
         self.new_entities = []
+        self.towers = []
         self.obstacles = set()  # Set de coordenadas de celdas bloqueadas
         
         # Inicializar obstáculos y torres
         self.setup_obstacles()
         self.setup_towers()
+
+
+    def is_my_area(self, grid_position):
+        """
+        Verifica si una posición en la cuadrícula pertenece al área del jugador.
+        Para el jugador 1, el área es la mitad superior (filas 0-15).
+        Para el jugador 2, el área es la mitad inferior (filas 16-31).
+        """
+        columna, fila = grid_position
+        
+        if self.player_id == "1":
+            return 0 <= fila < 16  # Área del jugador 1 (superior)
+        elif self.player_id == "2":
+            return 16 <= fila < 32  # Área del jugador 2 (inferior)
+        return False
+
+
+    def win_condition(self):
+        """
+        Define the win condition for the game.
+        """
+        # printear los ids de las torres para debug
+        print(self.player_id)
+        for tower in self.towers:
+            print(f"Tower ID: {tower.owner}, Life: {tower.life}")  # Debugging line
+        my_towers = [tower for tower in self.towers if str(tower.owner) == str(self.player_id)]
+        opponent_towers = [tower for tower in self.towers if str(tower.owner) != str(self.player_id)]
+
+        print(f"My towers: {len(my_towers)}, Opponent towers: {len(opponent_towers)}")  # Debugging line
+        
+        if not my_towers:
+            return "lose"
+        elif not opponent_towers:
+            return "win"
+        return "continue"
 
     def setup_obstacles(self):
         """
@@ -96,6 +132,11 @@ class Board(GameState):
             torre_principal_inf, torre_izq_inf, torre_der_inf
         ])
 
+        self.towers.extend([
+            torre_principal_sup, torre_izq_sup, torre_der_sup,
+            torre_principal_inf, torre_izq_inf, torre_der_inf
+        ])
+
     def is_valid_placement(self, grid_position):
         """
         Verifica si una posición es válida para colocar una carta.
@@ -127,6 +168,7 @@ class Board(GameState):
 
         # eliminar los inactivos
         self.entities = [e for e in self.entities if e.active]
+        self.towers = [t for t in self.towers if t.active]
 
         # añadir nuevas entidades generadas
         if self.new_entities:
@@ -179,20 +221,20 @@ class Board(GameState):
     def position_to_grid(self, position):
         return screen_to_grid(position[0], position[1], self.cell_size)
 
-    def create_entity_by_type(self, entity_type, position):
+    def create_entity_by_type(self, entity_type, position, player_id):
         float_pos = (position[0], position[1])
         if entity_type == "Caballero":
-            return Caballero(float_pos[0], float_pos[1], self.player_id)
+            return Caballero(float_pos[0], float_pos[1], player_id)
         elif entity_type == "Mago":
-            return Mago(float_pos[0], float_pos[1], self.player_id)
+            return Mago(float_pos[0], float_pos[1], player_id)
         elif entity_type == "Mosquetera":
-            return Mosquetera(float_pos[0], float_pos[1], self.player_id) 
+            return Mosquetera(float_pos[0], float_pos[1], player_id) 
         else: 
             return None
 
-    def add_entity(self, entity_type, grid_position):
+    def add_entity(self, entity_type, grid_position, player_id):
         print(f"Adding entity of type {entity_type} at grid position {grid_position}")
-        entity = self.create_entity_by_type(entity_type, grid_position)
+        entity = self.create_entity_by_type(entity_type, grid_position, player_id)
         if entity is not None:
             print(f"Entity created: {entity}")
             self.entities.append(entity)
@@ -223,12 +265,8 @@ class ClashSimulation(GameTimeline):
             player_id = event.data.get("player_id")
 
             if entity_type is not None and grid_position is not None:
-                game_state.player_id = player_id
-                game_state.add_entity(entity_type, grid_position) #añadimos la entidad al board
+                game_state.add_entity(entity_type, grid_position, player_id)
                 print(f"Spawned {entity_type} at {grid_position} for player {player_id}")
-
-
-
         
 
 
@@ -239,9 +277,9 @@ class Clash:
         self.height = 32
         self.tick_time = 1/25 # para evitar flotantes raros
         self.connected = False
-        self.board = Board()
+        self.board = Board(player_id=self.player_id)
         self.simulation = ClashSimulation(tick_time=self.tick_time)
-        self.menu = Menu()
+        self.menu = Menu(player_id=self.player_id)
         self.p2p = P2P(local_test=True, on_connect=self.on_connect, on_receive=self.on_receive)
         self.total_ticks = 0
         self.initial_timestamp = None
@@ -264,9 +302,6 @@ class Clash:
             self.simulation.add_event(event)
             print(event.aparition_time - self.p2p.initial_timestamp)
             print(self.simulation.simulation_time)
-
-
-
 
     def on_connect(self, addr):
         print(f"Connected to peer at {addr}")
@@ -307,6 +342,13 @@ class Clash:
             Maneja el clic en el tablero.
             Verifica que la posición sea válida antes de colocar la carta.
             """
+            # verificar que sea su area
+            if not self.board.is_my_area(grid_pos):
+                print(f"Posición fuera de área permitida: {grid_pos}. No se puede colocar carta aquí.")
+                # Opcionalmente, puedes deseleccionar la carta
+                self.menu.selected_card = None
+                return
+
             # Verificar si la posición es válida
             if not self.board.is_valid_placement(grid_pos):
                 print(f"Posición inválida: {grid_pos}. No se puede colocar carta aquí.")
@@ -355,6 +397,19 @@ class Clash:
                     self.handle_board_click(grid_pos)
 
     def update(self):
+        # win condition
+        win_condition = self.board.win_condition()
+        if win_condition == "win":
+            print("You win!")
+            self.running = False
+            pygame.quit()
+            sys.exit(0)
+        elif win_condition == "lose":
+            print("You lose!")
+            self.running = False
+            pygame.quit()
+            sys.exit(0)
+
         #print(f"Updating game state for player {self.player_id}")
 
         expected_total_ticks = int((self.p2p.get_synced_time() - self.menu.game_start_time) / self.tick_time)
@@ -388,7 +443,6 @@ class Clash:
         self.try_connection()
 
         while True:
-            #print(self.p2p.get_synced_time())
             self.handle_inputs()
             self.update()
 
