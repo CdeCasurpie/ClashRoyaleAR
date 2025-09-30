@@ -173,12 +173,33 @@ class Tower(Entity):
         if add_entity:
             add_entity(P)
 
+    def can_i_attack(self, entities):
+        if self.tower_type != TowerType.CENTRAL: 
+            return True
+
+        if self.tower_type == TowerType.CENTRAL and self.life < self.max_life:
+            return True
+
+        if (self.tower_type == TowerType.CENTRAL):
+            me_owner = self.owner
+            for entity in entities:
+                if entity.owner == me_owner and entity.type == EntityType.TOWER and entity.tower_type != TowerType.CENTRAL:
+                    # entonces es mi torre y no es la central
+                    if entity.life <= 0:
+                        return True
+        return False
 
     def update(self, tick_time, entities):
         if self.life <= 0:
             self.active = False
             return None
-        
+
+        if not self.can_i_attack(entities):
+            self.state = StateType.IDLE
+            self.cooldown = 0.0
+            self.target = None
+            return None # so never attack unless activated
+
         # verify state
         if self.target and self.target.life > 0 and self.in_range(self.target):
             self.state = StateType.ATTACKING
@@ -200,6 +221,41 @@ class Tower(Entity):
         self.life -= amount
         if self.life <= 0:
             self.active = False
+
+    def render(self, screen, cell_size):
+        # dibujar la torre como un circulo dependiendo de su tipo
+        screen_position = self.get_screen_position(cell_size)
+        radius = int(self.size * cell_size / 2)
+        if self.tower_type == TowerType.CENTRAL:
+            color = (0, 0, 255) if self.owner in [1, '1'] else (255, 0, 0)
+        else:
+            color = (0, 100, 255) if self.owner in [1, '1'] else (255, 100, 0)
+
+        # dibuajar circulo con transparencia
+        s = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+        pygame.draw.circle(s, color + (200,), (radius, radius), radius)
+        screen.blit(s, (int(screen_position[0]) - radius, int(screen_position[1]) - radius))
+
+        # dibujar rey o princesa
+        font = pygame.font.Font(None, 24)
+        if self.tower_type == TowerType.CENTRAL:
+            text = font.render("K", True, (255, 255, 255))
+        else:
+            text = font.render("P", True, (255, 255, 255))
+        text_rect = text.get_rect(center=(int(screen_position[0]), int(screen_position[1])))
+        screen.blit(text, text_rect)
+        # dibujar barra de vida
+        bar_width = radius * 2
+        bar_height = 5
+        health_percent = max(0, self.life / self.max_life)
+        pygame.draw.rect(screen, (50, 50, 50), (int(screen_position[0]) - radius, int(screen_position[1]) - radius - 10, bar_width, bar_height))
+        health_color = (0, 255, 0) if health_percent > 0.5 else (255, 255, 0) if health_percent > 0.25 else (255, 0, 0)
+        pygame.draw.rect(screen, health_color, (int(screen_position[0]) - radius, int(screen_position[1]) - radius - 10, int(bar_width * health_percent), bar_height))
+
+    def distance_to(self, other):
+        # consider my radius
+        effective_distance = super().distance_to(other) - self.size / 2
+        return effective_distance
 
 
 class Troop(Entity, ABC):
@@ -250,6 +306,9 @@ class Troop(Entity, ABC):
         """
         Check if target is within attack range.
         """
+        if target.type == EntityType.TOWER:
+            return target.distance_to(self) <= self.range
+
         return self.distance_to(target) <= self.range
     
     def get_valid_waypoints(self, obstacles, map_width = 18, map_height = 32):
@@ -609,7 +668,7 @@ class Caballero(Troop):
     def attack(self, target, add_entity=None):
         if target.life > 0:
             target.receive_damage(self.damage)
-    
+
     def render(self, screen, cell_size):
         screen_pos = self.get_screen_position(cell_size)
         x, y = int(screen_pos[0]), int(screen_pos[1])

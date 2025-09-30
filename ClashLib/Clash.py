@@ -81,12 +81,12 @@ class Board(GameState):
         Crea las entidades de torres en el tablero.
         """
         # Torres del jugador 1 (superior)
-        torre_principal_sup = Tower(8, 2, owner="1", tower_type=TowerType.CENTRAL)
+        torre_principal_sup = Tower(8.5, 2.5, owner="1", tower_type=TowerType.CENTRAL)
         torre_izq_sup = Tower(3, 6, owner="1", tower_type=TowerType.LATERAL)
         torre_der_sup = Tower(14, 6, owner="1", tower_type=TowerType.LATERAL)
         
         # Torres del jugador 2 (inferior)
-        torre_principal_inf = Tower(8, 28, owner="2", tower_type=TowerType.CENTRAL)
+        torre_principal_inf = Tower(8.5, 28.5, owner="2", tower_type=TowerType.CENTRAL)
         torre_izq_inf = Tower(3, 25, owner="2", tower_type=TowerType.LATERAL)
         torre_der_inf = Tower(14, 25, owner="2", tower_type=TowerType.LATERAL)
         
@@ -145,17 +145,9 @@ class Board(GameState):
                 # Determinar el tipo de celda
                 es_rio = 15 <= fila <= 16
                 es_puente = es_rio and ((2 <= columna <= 4) or (13 <= columna <= 15))
-                es_torre = (columna, fila) in self.obstacles and not (es_rio and not es_puente)
                 
                 # Color base
-                if es_torre:
-                    # Torres en morado/naranja
-                    if ((1 <= fila <= 4 and 7 <= columna <= 10) or 
-                        (27 <= fila <= 30 and 7 <= columna <= 10)):
-                        color = (156, 39, 176)  # Morado para torres principales
-                    else:
-                        color = (255, 152, 0)  # Naranja para torres laterales
-                elif es_rio and not es_puente:
+                if es_rio and not es_puente:
                     # Agua en azul
                     color = (33, 150, 243)
                 else:
